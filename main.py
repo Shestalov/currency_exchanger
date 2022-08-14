@@ -64,7 +64,6 @@ def user(user_id):
     return f"User info {res}"
 
 
-# історія по юзер ід
 @app.get('/user/<user_id>/history')
 def user_history(user_id):
     res = get_connect_database(f"""SELECT CurrencyFrom, CurrencyTo, AmountSpent, Rate, ReceivedAmount, Commission, 
