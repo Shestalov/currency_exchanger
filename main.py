@@ -25,14 +25,14 @@ def index():
 
 
 # усі валюти (купівля, продаж)
-@app.get('/currency')  # , methods=['GET']
+@app.get('/currency')
 def get_all_currency():
     currency = get_connect_database("""SELECT CurrencyName, Buy, Sale, AvailableQuantity FROM Currency""")
     return f"Here are all the currency's: {currency}"
 
 
 # вибраний курс (купівля ТА продаж) # POST ?
-@app.get('/currency/<currency_name>')  # , methods=['GET']
+@app.get('/currency/<currency_name>')
 def get_currency(currency_name):
     currency = get_connect_database(f"""SELECT CurrencyName, Buy, Sale, AvailableQuantity 
                                         FROM Currency WHERE CurrencyName = '{currency_name}'""")
