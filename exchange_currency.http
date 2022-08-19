@@ -1,7 +1,7 @@
-POST http://127.0.0.1:5000/currency/usd/to/eur
+POST http://127.0.0.1:5000/currency/eur/to/usd
 Content-Type: application/json
 
 {
-  "UserId": "101",
+  "UserId": "102",
   "Amount": 100
 }

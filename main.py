@@ -77,41 +77,42 @@ def post_currency_to_currency(currency_name1, currency_name2):
 
     # example [{'eur': 8000}]
     currency2_in_exchanger = get_connect_database(f"""SELECT AvailableQuantity AS '{currency_name2}' 
-                                                                FROM Currency WHERE CurrencyName='{currency_name2}' 
-                                                                AND Date='{DATE_NOW}';""")
+                                                        FROM Currency WHERE CurrencyName='{currency_name2}' 
+                                                        AND Date='{DATE_NOW}';""")
 
-    # чи в обміннику вистачає валюти для обміну
+    # Does currency2 enough for exchange?
     if currency2_in_exchanger[0][f"{currency_name2}"] >= need_currency2[0][f"{currency_name2}"]:
-        # чи у юзера вистачає валюти для обміну та чи обрана валюта співпадає з тим що у юзера в акаунті
+
+        # Does user have enough for exchange?
+        # Is the currency of the user in the account equal to the currency that the user wants to exchange?
         for currency_1 in user_balance:
             if currency_1["CurrencyName"] == f"{currency_name1}" and currency_1["Balance"] >= amount_to_exchange:
 
-                # відняти суму обміну у юзера
+                # minus currency_name1 from user account what he wanted to exchange
                 balance = currency_1["Balance"] - amount_to_exchange
                 get_connect_database(f"""UPDATE Account SET Balance='{balance}'
                                             WHERE CurrencyName='{currency_name1}' AND UserId='{user_id}';""")
 
-                # додати або створити нову валюту для юзера в акаунті
-                # якщо у юзера більше однієї валюти в акаунті
+                # update or create currency_name2 for user account
                 if len(user_balance) > 1:
                     for currency_2 in user_balance:
                         if currency_2["CurrencyName"] == f"{currency_name2}":
                             new_balance = currency_2["Balance"] + need_currency2[0][f"{currency_name2}"]
-                            get_connect_database(f"""UPDATE Account SET Balance='{round(new_balance)}'
+                            get_connect_database(f"""UPDATE Account SET Balance='{"{:.2f}".format(new_balance)}'
                                                         WHERE CurrencyName='{currency_name2}' AND UserId='{user_id}';""")
-                # якщо відсутня валюта в акаунті для отримання то створити нову
+
                 else:
                     get_connect_database(f"""INSERT INTO Account (UserId, Balance, CurrencyName)
                                                 VALUES ('{user_id}', '{need_currency2[0][f'{currency_name2}']}',
                                                         '{currency_name2}');""")
 
-                # віднімання виданої валюти з обмінника
-                currency2_in = currency2_in_exchanger[0][f"{currency_name2}"] - amount_to_exchange
+                # minus currency_name2 from exchanger
+                currency2_in_exchanger = currency2_in_exchanger[0][f"{currency_name2}"] - amount_to_exchange
 
-                get_connect_database(f"""UPDATE Currency SET AvailableQuantity='{currency2_in}' 
+                get_connect_database(f"""UPDATE Currency SET AvailableQuantity='{currency2_in_exchanger}' 
                                             WHERE Date='{DATE_NOW}' AND CurrencyName='{currency_name2}';""")
 
-                # додавання отриманої валюти у обмінник, example [{'usd': 10000}]
+                # add currency_name1 to exchanger, example [{'usd': 10000}]
                 currency1_in_exchanger = get_connect_database(f"""SELECT AvailableQuantity AS '{currency_name1}'
                                                                     FROM Currency WHERE CurrencyName='{currency_name1}' 
                                                                     AND Date='{DATE_NOW}' ;""")
@@ -123,7 +124,7 @@ def post_currency_to_currency(currency_name1, currency_name2):
 
                 # rate for transaction history
                 rate = "{:.2f}".format((need_currency2[0][f"{currency_name2}"] / amount_to_exchange))
-                commission = 10
+                commission = 0
                 # save transaction
                 get_connect_database(f"""INSERT INTO Transactions (UserId, CurrencyFrom, CurrencyTo, AmountSpent, 
                                                                     ReceivedAmount, Rate, Commission, Date) 
@@ -148,9 +149,8 @@ def user_info(user_id):
 
 @app.get('/user/<user_id>/history')
 def user_history(user_id):
-    history = get_connect_database(f"""SELECT CurrencyFrom, CurrencyTo, AmountSpent, 
-                                                    Rate, ReceivedAmount, Commission, Date
-                                            FROM Transactions WHERE UserId='{user_id}';""")
+    history = get_connect_database(f"""SELECT CurrencyFrom, CurrencyTo, AmountSpent, Rate, ReceivedAmount, 
+                                                Commission, Date FROM Transactions WHERE UserId='{user_id}';""")
     return f"History: {history}"
 
 
@@ -164,22 +164,28 @@ def currency_rating(currency_name):
 @app.post('/currency/<currency_name>/rating')
 def add_currency_rating(currency_name):
     request_data = request.get_json()
-    user_id = request_data['UserId']
+    id_user = request_data['UserId']
     comment = request_data['Comment']
     rating = request_data['Rating']
 
-    get_connect_database(f"""INSERT INTO Rating (UserId, CurrencyName, Rating, Comment, Date) 
-                                    VALUES ('{int(user_id)}', '{currency_name}', '{rating}', 
-                                            '{comment}', '{DATE_NOW}');""")
+    # users all comments/ratings to the specified currency
+    user_rating = get_connect_database(f"""SELECT UserId, CurrencyName FROM Rating WHERE UserId='{id_user}';""")
 
-    return "The rating and comment are added."
+    # checking if comment/rating is existed to the specified currency. If exist - update.
+    trigger = 0
+    for rating in user_rating:
+        if (rating["UserId"] == id_user) and (rating["CurrencyName"] == currency_name):
+            get_connect_database(f"""UPDATE Rating SET Comment='{comment}', Date='{DATE_NOW}'
+                                         WHERE CurrencyName='{currency_name}' AND UserId='{id_user}';""")
+        else:
+            trigger += 1
+        return "The rating and comment are updated."
 
-# [{'CurrencyName': 'usd', 'UserId': 101}, {'CurrencyName': 'eur', 'UserId': 101}]
-# [{'UserId': 101, 'CurrencyName': 'usd'}]
-# @app.route('/test')
-# def test():
-#     all_rating = get_connect_database(f"""SELECT CurrencyName,UserId  FROM Rating WHERE UserId='101';""")
-#     return f"ok {all_rating}"
+    # if comment/rating doesn't exist - create new one.
+    if trigger >= 2:
+        get_connect_database(f"""INSERT INTO Rating (UserId, CurrencyName, Rating, Comment, Date)
+                                    VALUES ('{id_user}', '{currency_name}', '{rating}', '{comment}', '{DATE_NOW}');""")
+        return "The rating and comment are added."
 
 
 if __name__ == '__main__':
