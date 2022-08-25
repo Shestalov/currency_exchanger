@@ -1,26 +1,13 @@
-import sqlite3
 from datetime import datetime
 from flask import Flask, request
+from models import db
+from models import Currency, Account, Transactions, Rating
 
 app = Flask(__name__)
 
-DATE_NOW = datetime.now().strftime("%d-%m-%Y")
-
-
-def dict_factory(cursor, row):
-    d = {}
-    for idx, col in enumerate(cursor.description):
-        d[col[0]] = row[idx]
-    return d
-
-
-def get_connect_database(query):
-    with sqlite3.connect('identifier.sqlite') as conn:
-        conn.row_factory = dict_factory
-        conn.commit()
-        cursor = conn.execute(query)
-        res = cursor.fetchall()
-        return res
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///identifier.sqlite'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
 
 
 @app.route('/')
@@ -28,164 +15,139 @@ def index():
     return "Hello there! It's an exchanger!"
 
 
-# all currencies (buy, sale)
 @app.get('/currency')
 def all_currency():
-    all_currency_info = get_connect_database(f"""SELECT CurrencyName, Buy, Sale, AvailableQuantity FROM Currency 
-                                                    WHERE Date='{DATE_NOW}';""")
-    return f"Here are all the currency's: {all_currency_info} on {DATE_NOW}"
+    date_now = datetime.now().strftime("%d-%m-%Y")
+    all_currency_info = Currency.query.filter_by(Date=date_now).all()
+    return f"Currency's: {[itm.to_dict() for itm in all_currency_info]}"
 
 
 @app.get('/currency/<currency_name>')
 def currency(currency_name):
-    currency_info = get_connect_database(f"""SELECT CurrencyName, Buy, Sale, AvailableQuantity 
-                                                FROM Currency WHERE CurrencyName = '{currency_name}' 
-                                                AND Date='{DATE_NOW}';""")
-    return f"Currency info: {currency_info} on {DATE_NOW}"
+    date_now = datetime.now().strftime("%d-%m-%Y")
+    currency_info = Currency.query.filter_by(CurrencyName=currency_name, Date=date_now).all()
+    return f"{currency_name} info: {[itm.to_dict() for itm in currency_info]}"
 
 
-# currency -> uah -> currency
 @app.get('/currency/<currency_name1>/to/<currency_name2>')
 def currency_to_currency(currency_name1, currency_name2):
-    result_exchange = get_connect_database(f"""SELECT (
-                                                (SELECT Buy FROM Currency 
-                                                WHERE CurrencyName = '{currency_name1}' AND Date='{DATE_NOW}') /
-                                                (SELECT Sale FROM Currency 
-                                                WHERE CurrencyName = '{currency_name2}' AND Date='{DATE_NOW}')) 
-                                                AS '{currency_name2}';""")
-    return f"{result_exchange} on {DATE_NOW}"
+    date_now = datetime.now().strftime("%d-%m-%Y")
+
+    currency_1 = Currency.query.filter_by(CurrencyName=currency_name1, Date=date_now).first().Buy
+    currency_2 = Currency.query.filter_by(CurrencyName=currency_name2, Date=date_now).first().Sale
+
+    result_exchange = currency_1 / currency_2
+
+    return f"Result:  {'{:.2f}'.format(result_exchange)} {currency_name2}"
 
 
 @app.post('/currency/<currency_name1>/to/<currency_name2>')
 def post_currency_to_currency(currency_name1, currency_name2):
     user_id = request.get_json()["UserId"]
-    amount_to_exchange = request.get_json()["Amount"]
+    amount_to = request.get_json()["Amount"]
+    date_now = datetime.now().strftime("%d-%m-%Y")
 
-    # example [{'CurrencyName': 'usd', 'Balance': 900}, {'CurrencyName': 'eur', 'Balance': 97}]
-    user_balance = get_connect_database(f"""SELECT CurrencyName, Balance FROM Account WHERE UserId='{user_id}';""")
+    user_balance = Account.query.filter_by(CurrencyName=currency_name1, UserId=user_id).first()
+    currency_1_in = Currency.query.filter_by(CurrencyName=currency_name1, Date=date_now).first()
+    currency_2_in = Currency.query.filter_by(CurrencyName=currency_name2, Date=date_now).first()
+    res_exchanging = float("{:.2f}".format((currency_1_in.Buy * amount_to / currency_2_in.Sale)))
 
-    # example [{'eur': 97.43101343101343}]
-    need_currency2 = get_connect_database(f"""SELECT ((SELECT Buy FROM Currency WHERE CurrencyName = '{currency_name1}' 
-                                                AND Date='{DATE_NOW}') 
-                                                
-                                                * '{amount_to_exchange}' / 
-                                                
-                                                (SELECT Sale FROM Currency WHERE CurrencyName = '{currency_name2}' 
-                                                 AND Date='{DATE_NOW}')) 
-                                                 
-                                                 AS '{currency_name2}';""")
+    """Is there enough currency2 in exchanger?"""
+    if currency_2_in.AvailableQuantity >= res_exchanging:
+        """Does the user have enough to exchange?"""
+        if user_balance.Balance >= amount_to:
+            """minus currency_name1 amount from user account"""
+            updated_user_balance_1 = user_balance.Balance - amount_to
+            Account.query.filter_by(UserId=user_id, CurrencyName=currency_name1).update(
+                dict(Balance=updated_user_balance_1))
 
-    # example [{'eur': 8000}]
-    currency2_in_exchanger = get_connect_database(f"""SELECT AvailableQuantity AS '{currency_name2}' 
-                                                        FROM Currency WHERE CurrencyName='{currency_name2}' 
-                                                        AND Date='{DATE_NOW}';""")
+            """update or create currency_name2 for user account"""
+            user_balance_2 = Account.query.filter_by(CurrencyName=currency_name2, UserId=user_id).first()
+            if user_balance_2 is not None:
+                updated_user_balance_2 = user_balance_2.Balance + res_exchanging
+                Account.query.filter_by(UserId=user_id, CurrencyName=currency_name2).update(
+                    dict(Balance=updated_user_balance_2))
 
-    # Does currency2 enough for exchange?
-    if currency2_in_exchanger[0][f"{currency_name2}"] >= need_currency2[0][f"{currency_name2}"]:
+            elif user_balance_2 is None:
+                created_currency_2 = Account(UserId=user_id, Balance=res_exchanging, CurrencyName=currency_name2)
+                db.session.add(created_currency_2)
 
-        # Does user have enough for exchange?
-        # Is the currency of the user in the account equal to the currency that the user wants to exchange?
-        for currency_1 in user_balance:
-            if currency_1["CurrencyName"] == f"{currency_name1}" and currency_1["Balance"] >= amount_to_exchange:
+            """minus currency_name2 from exchanger"""
+            updated_currency_2_in = "{:.2f}".format(currency_2_in.AvailableQuantity - res_exchanging)
+            Currency.query.filter_by(CurrencyName=currency_name2, Date=date_now).update(
+                dict(AvailableQuantity=updated_currency_2_in))
 
-                # minus currency_name1 from user account what he wanted to exchange
-                balance = currency_1["Balance"] - amount_to_exchange
-                get_connect_database(f"""UPDATE Account SET Balance='{balance}'
-                                            WHERE CurrencyName='{currency_name1}' AND UserId='{user_id}';""")
+            """plus currency_name1 to exchanger"""
+            updated_currency_1_in = currency_1_in.AvailableQuantity + amount_to
+            Currency.query.filter_by(CurrencyName=currency_name1, Date=date_now).update(
+                dict(AvailableQuantity=updated_currency_1_in))
 
-                # update or create currency_name2 for user account
-                if len(user_balance) > 1:
-                    for currency_2 in user_balance:
-                        if currency_2["CurrencyName"] == f"{currency_name2}":
-                            new_balance = currency_2["Balance"] + need_currency2[0][f"{currency_name2}"]
-                            get_connect_database(f"""UPDATE Account SET Balance='{"{:.2f}".format(new_balance)}'
-                                                        WHERE CurrencyName='{currency_name2}' AND UserId='{user_id}';""")
+            """save transaction"""
+            rate = float("{:.2f}".format((res_exchanging / amount_to)))
+            commission = 0
 
-                else:
-                    get_connect_database(f"""INSERT INTO Account (UserId, Balance, CurrencyName)
-                                                VALUES ('{user_id}', '{need_currency2[0][f'{currency_name2}']}',
-                                                        '{currency_name2}');""")
+            rating = Transactions(UserId=user_id, CurrencyFrom=currency_name1, CurrencyTo=currency_name2,
+                                  AmountSpent=amount_to, ReceivedAmount=res_exchanging, Rate=rate,
+                                  Commission=commission, Date=date_now)
+            db.session.add(rating)
 
-                # minus currency_name2 from exchanger
-                currency2_in_exchanger = currency2_in_exchanger[0][f"{currency_name2}"] - amount_to_exchange
-
-                get_connect_database(f"""UPDATE Currency SET AvailableQuantity='{currency2_in_exchanger}' 
-                                            WHERE Date='{DATE_NOW}' AND CurrencyName='{currency_name2}';""")
-
-                # add currency_name1 to exchanger, example [{'usd': 10000}]
-                currency1_in_exchanger = get_connect_database(f"""SELECT AvailableQuantity AS '{currency_name1}'
-                                                                    FROM Currency WHERE CurrencyName='{currency_name1}' 
-                                                                    AND Date='{DATE_NOW}' ;""")
-
-                receive_in_exchanger = currency1_in_exchanger[0][f"{currency_name1}"] + amount_to_exchange
-
-                get_connect_database(f"""UPDATE Currency SET AvailableQuantity='{receive_in_exchanger}' 
-                                         WHERE Date='{DATE_NOW}' AND CurrencyName='{currency_name1}';""")
-
-                # rate for transaction history
-                rate = "{:.2f}".format((need_currency2[0][f"{currency_name2}"] / amount_to_exchange))
-                commission = 0
-                # save transaction
-                get_connect_database(f"""INSERT INTO Transactions (UserId, CurrencyFrom, CurrencyTo, AmountSpent, 
-                                                                    ReceivedAmount, Rate, Commission, Date) 
-                                                VALUES ('{user_id}', '{currency_name1}', '{currency_name2}', 
-                                                        '{amount_to_exchange}', 
-                                                        '{"{:.2f}".format(need_currency2[0][f'{currency_name2}'])}', 
-                                                        '{rate}', '{commission}', '{DATE_NOW}')""")
-
-                return "Transaction is successful"
-            else:
-                return "User doesn't have enough money or wrong username or wrong user_currency"
+            """commit all"""
+            db.session.commit()
+            return "Transaction is successful"
         else:
-            return f"Exchanger doesn't have enough: {currency_name2}"
+            return "User doesn't have enough money or wrong username or wrong user_currency"
+    else:
+        return f"Exchanger doesn't have enough: {currency_name2}"
 
 
-# user info (example user_id = 101)
 @app.get('/user/<user_id>')
 def user_info(user_id):
-    info = get_connect_database(f"""SELECT UserId, Balance, CurrencyName FROM Account WHERE UserId = '{user_id}';""")
-    return f"User info {info}"
+    info = Account.query.filter_by(UserId=user_id).all()
+    return f"User info {[itm.to_dict() for itm in info]}"
 
 
 @app.get('/user/<user_id>/history')
 def user_history(user_id):
-    history = get_connect_database(f"""SELECT CurrencyFrom, CurrencyTo, AmountSpent, Rate, ReceivedAmount, 
-                                                Commission, Date FROM Transactions WHERE UserId='{user_id}';""")
-    return f"History: {history}"
+    history = Transactions.query.filter_by(UserId=user_id).order_by(Transactions.Date.desc()).all()
+    return f"History: {[itm.to_dict() for itm in history]}"
 
 
 @app.get('/currency/<currency_name>/rating')
+def get_currency_rating(currency_name):
+    all_ratings = Rating.query.filter_by(CurrencyName=currency_name).all()
+    return f"Rating {currency_name}: {[itm.to_dict() for itm in all_ratings]}"
+
+
+@app.route('/currency/<currency_name>/rating', methods=['POST', 'PUT', 'DELETE'])
 def currency_rating(currency_name):
-    rating = get_connect_database(f"""SELECT Rating, Comment, Date FROM Rating 
-                                        WHERE Rating.CurrencyName='{currency_name}';""")
-    return f"Rating {currency_name}: {rating}"
-
-
-@app.post('/currency/<currency_name>/rating')
-def add_currency_rating(currency_name):
     request_data = request.get_json()
-    id_user = request_data['UserId']
+    user_id = request_data['UserId']
     comment = request_data['Comment']
     rating = request_data['Rating']
+    date_now = datetime.now().strftime("%d-%m-%Y")
 
-    # users all comments/ratings to the specified currency
-    user_rating = get_connect_database(f"""SELECT UserId, CurrencyName FROM Rating WHERE UserId='{id_user}';""")
+    """users all comment/rating to the specified currency"""
+    user_rating = Rating.query.filter_by(UserId=user_id, CurrencyName=currency_name).first()
 
-    # checking if comment/rating is existed to the specified currency. If exist - update.
-    trigger = 0
-    for rating in user_rating:
-        if (rating["UserId"] == id_user) and (rating["CurrencyName"] == currency_name):
-            get_connect_database(f"""UPDATE Rating SET Comment='{comment}', Date='{DATE_NOW}'
-                                         WHERE CurrencyName='{currency_name}' AND UserId='{id_user}';""")
-        else:
-            trigger += 1
-        return "The rating and comment are updated."
+    if request.method == "DELETE":
+        db.session.delete(user_rating)
+        db.session.commit()
+        return "The rating and comment are deleted."
 
-    # if comment/rating doesn't exist - create new one.
-    if trigger >= 2:
-        get_connect_database(f"""INSERT INTO Rating (UserId, CurrencyName, Rating, Comment, Date)
-                                    VALUES ('{id_user}', '{currency_name}', '{rating}', '{comment}', '{DATE_NOW}');""")
-        return "The rating and comment are added."
+    elif request.method == "POST" or "PUT":
+
+        if user_rating is not None:
+            Rating.query.filter_by(UserId=user_id, CurrencyName=currency_name).update(
+                dict(Rating=rating, Comment=comment, Date=date_now))
+            db.session.commit()
+            return "The rating and comment are edited."
+
+        elif user_rating is None:
+            new_rating = Rating(UserId=user_id, CurrencyName=currency_name, Rating=rating, Comment=comment,
+                                Date=date_now)
+            db.session.add(new_rating)
+            db.session.commit()
+            return "The rating and comment are added."
 
 
 if __name__ == '__main__':
