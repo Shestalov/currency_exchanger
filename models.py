@@ -5,7 +5,7 @@ db = SQLAlchemy()
 
 class Currency(db.Model):
     Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    CurrencyName = db.Column(db.String(10), nullable=False)
+    CurrencyName = db.Column(db.String(15), nullable=False)
     Buy = db.Column(db.REAL, nullable=False)
     Sale = db.Column(db.REAL, nullable=False)
     AvailableQuantity = db.Column(db.REAL, nullable=False)
@@ -20,8 +20,7 @@ class Currency(db.Model):
             'CurrencyName': self.CurrencyName,
             'Buy': self.Buy,
             'Sale': self.Sale,
-            'AvailableQuantity': self.AvailableQuantity,
-            'Date': self.Date
+            'AvailableQuantity': self.AvailableQuantity
         }
 
 

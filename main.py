@@ -2,12 +2,14 @@ from datetime import datetime
 from flask import Flask, request
 from models import db
 from models import Currency, Account, Transactions, Rating
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///identifier.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
+migrate = Migrate(app, db)
 
 
 @app.route('/')
@@ -86,10 +88,10 @@ def post_currency_to_currency(currency_name1, currency_name2):
             rate = float("{:.2f}".format((res_exchanging / amount_to)))
             commission = 0
 
-            rating = Transactions(UserId=user_id, CurrencyFrom=currency_name1, CurrencyTo=currency_name2,
-                                  AmountSpent=amount_to, ReceivedAmount=res_exchanging, Rate=rate,
-                                  Commission=commission, Date=date_now)
-            db.session.add(rating)
+            transaction = Transactions(UserId=user_id, CurrencyFrom=currency_name1, CurrencyTo=currency_name2,
+                                       AmountSpent=amount_to, ReceivedAmount=res_exchanging, Rate=rate,
+                                       Commission=commission, Date=date_now)
+            db.session.add(transaction)
 
             """commit all"""
             db.session.commit()
@@ -115,7 +117,16 @@ def user_history(user_id):
 @app.get('/currency/<currency_name>/rating')
 def get_currency_rating(currency_name):
     all_ratings = Rating.query.filter_by(CurrencyName=currency_name).all()
-    return f"Rating {currency_name}: {[itm.to_dict() for itm in all_ratings]}"
+
+    avr_rating = dict(db.session.query(db.func.avg(Rating.Rating).label('Rating')).filter(
+        Rating.CurrencyName == currency_name).first())['Rating']
+
+    rating_comment_date = Rating.query.with_entities(Rating.Rating, Rating.Comment, Rating.Date).filter_by(
+        CurrencyName=currency_name).all()
+
+    return f"All rating:{[item.to_dict() for item in all_ratings]}, " \
+           f"Average rating for {currency_name} is: {avr_rating}, " \
+           f"Only rating, comment and day: {rating_comment_date}"
 
 
 @app.route('/currency/<currency_name>/rating', methods=['POST', 'PUT', 'DELETE'])
@@ -134,20 +145,18 @@ def currency_rating(currency_name):
         db.session.commit()
         return "The rating and comment are deleted."
 
-    elif request.method == "POST" or "PUT":
+    elif request.method == "POST":
+        new_rating = Rating(UserId=user_id, CurrencyName=currency_name, Rating=rating, Comment=comment,
+                            Date=date_now)
+        db.session.add(new_rating)
+        db.session.commit()
+        return "The rating and comment are added."
 
-        if user_rating is not None:
-            Rating.query.filter_by(UserId=user_id, CurrencyName=currency_name).update(
-                dict(Rating=rating, Comment=comment, Date=date_now))
-            db.session.commit()
-            return "The rating and comment are edited."
-
-        elif user_rating is None:
-            new_rating = Rating(UserId=user_id, CurrencyName=currency_name, Rating=rating, Comment=comment,
-                                Date=date_now)
-            db.session.add(new_rating)
-            db.session.commit()
-            return "The rating and comment are added."
+    elif request.method == "PUT":
+        Rating.query.filter_by(UserId=user_id, CurrencyName=currency_name).update(
+            dict(Rating=rating, Comment=comment, Date=date_now))
+        db.session.commit()
+        return "The rating and comment are edited."
 
 
 if __name__ == '__main__':
