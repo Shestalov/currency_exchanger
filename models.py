@@ -4,15 +4,17 @@ db = SQLAlchemy()
 
 
 class Currency(db.Model):
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    CurrencyName = db.Column(db.String(15), nullable=False)
-    Buy = db.Column(db.REAL, nullable=False)
-    Sale = db.Column(db.REAL, nullable=False)
-    AvailableQuantity = db.Column(db.REAL, nullable=False)
-    Date = db.Column(db.String(10), nullable=False)
+    __tablename__ = 'Currency'
+
+    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=True, unique=True)
+    CurrencyName = db.Column(db.String(15), nullable=True)
+    Buy = db.Column(db.REAL, nullable=True)
+    Sale = db.Column(db.REAL, nullable=True)
+    AvailableQuantity = db.Column(db.REAL, nullable=True)
+    Date = db.Column(db.String(10), nullable=True)
 
     def __repr__(self):
-        return '<Currency %r>' % self.Id
+        return '<Currency %r>' % self.CurrencyName
 
     def to_dict(self):
         return {
@@ -20,14 +22,16 @@ class Currency(db.Model):
             'CurrencyName': self.CurrencyName,
             'Buy': self.Buy,
             'Sale': self.Sale,
-            'AvailableQuantity': self.AvailableQuantity
+            'AvailableQuantity': self.AvailableQuantity,
+            'Date': self.Date
         }
 
 
 class User(db.Model):
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    Login = db.Column(db.String(20), nullable=False, unique=True)
-    Password = db.Column(db.String(30), nullable=False)
+    __tablename__ = 'User'
+    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=True, unique=True)
+    Login = db.Column(db.String(20), nullable=True, unique=True)
+    Password = db.Column(db.String(30), nullable=True)
 
     def __repr__(self):
         return '<User %r>' % self.Id
@@ -36,38 +40,40 @@ class User(db.Model):
         return {
             'Id': self.Id,
             'Login': self.Login,
-            'Password': self.Password,
+            'Password': self.Password
         }
 
 
 class Account(db.Model):
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    UserId = db.Column(db.Integer, nullable=False)
-    Balance = db.Column(db.REAL, nullable=False)
-    CurrencyName = db.Column(db.String(10), nullable=False)
+    __tablename__ = 'Account'
+    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=True, unique=True)
+    UserId = db.Column(db.Integer, nullable=True)
+    Balance = db.Column(db.REAL, nullable=True)
+    CurrencyName = db.Column(db.String(10), nullable=True)
 
     def __repr__(self):
-        return '<Account %r>' % self.Id
+        return '<Account %r>' % self.UserId
 
     def to_dict(self):
         return {
             'Id': self.Id,
             'UserId': self.UserId,
             'Balance': self.Balance,
-            'CurrencyName': self.CurrencyName,
+            'CurrencyName': self.CurrencyName
         }
 
 
 class Transactions(db.Model):
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    UserId = db.Column(db.Integer, nullable=False)
-    CurrencyFrom = db.Column(db.String(10), nullable=False)
-    CurrencyTo = db.Column(db.String(10), nullable=False)
-    AmountSpent = db.Column(db.REAL, nullable=False)
-    ReceivedAmount = db.Column(db.REAL, nullable=False)
-    Rate = db.Column(db.Integer, nullable=False)
-    Commission = db.Column(db.Integer, nullable=False)
-    Date = db.Column(db.String(10), nullable=False)
+    __tablename__ = 'Transactions'
+    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=True, unique=True)
+    UserId = db.Column(db.Integer, nullable=True)
+    CurrencyFrom = db.Column(db.String(10), nullable=True)
+    CurrencyTo = db.Column(db.String(10), nullable=True)
+    AmountSpent = db.Column(db.REAL, nullable=True)
+    ReceivedAmount = db.Column(db.REAL, nullable=True)
+    Rate = db.Column(db.Integer, nullable=True)
+    Commission = db.Column(db.Integer, nullable=True)
+    Date = db.Column(db.String(10), nullable=True)
 
     def __repr__(self):
         return '<Currency %r>' % self.Id
@@ -87,12 +93,13 @@ class Transactions(db.Model):
 
 
 class Rating(db.Model):
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    UserId = db.Column(db.Integer, nullable=False)
-    CurrencyName = db.Column(db.String(10), nullable=False)
-    Rating = db.Column(db.Integer, nullable=False)
-    Comment = db.Column(db.Text(50), nullable=False)
-    Date = db.Column(db.String(10), nullable=False)
+    __tablename__ = 'Rating'
+    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=True, unique=True)
+    UserId = db.Column(db.Integer, nullable=True)
+    CurrencyName = db.Column(db.String(10), nullable=True)
+    Rating = db.Column(db.Integer, nullable=True)
+    Comment = db.Column(db.String(50), nullable=True)
+    Date = db.Column(db.String(10), nullable=True)
 
     def __repr__(self):
         return '<Currency %r>' % self.Id
@@ -104,5 +111,5 @@ class Rating(db.Model):
             'CurrencyName': self.CurrencyName,
             'Rating': self.Rating,
             'Comment': self.Comment,
-            'Date': self.Date,
+            'Date': self.Date
         }

@@ -1,4 +1,6 @@
 from datetime import datetime
+
+import psycopg2
 from flask import Flask, request
 from models import db
 from models import Currency, Account, Transactions, Rating
@@ -6,7 +8,7 @@ from flask_migrate import Migrate
 
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///identifier.sqlite'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:example@127.0.0.1:5432/postgres'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -21,14 +23,14 @@ def index():
 def all_currency():
     date_now = datetime.now().strftime("%d-%m-%Y")
     all_currency_info = Currency.query.filter_by(Date=date_now).all()
-    return f"Currency's: {[itm.to_dict() for itm in all_currency_info]}"
+    return [itm.to_dict() for itm in all_currency_info]
 
 
 @app.get('/currency/<currency_name>')
 def currency(currency_name):
     date_now = datetime.now().strftime("%d-%m-%Y")
     currency_info = Currency.query.filter_by(CurrencyName=currency_name, Date=date_now).all()
-    return f"{currency_name} info: {[itm.to_dict() for itm in currency_info]}"
+    return [itm.to_dict() for itm in currency_info]
 
 
 @app.get('/currency/<currency_name1>/to/<currency_name2>')
@@ -40,7 +42,7 @@ def currency_to_currency(currency_name1, currency_name2):
 
     result_exchange = currency_1 / currency_2
 
-    return f"Result:  {'{:.2f}'.format(result_exchange)} {currency_name2}"
+    return [{"result": '{:.2f}'.format(result_exchange)}]
 
 
 @app.post('/currency/<currency_name1>/to/<currency_name2>')
@@ -105,13 +107,13 @@ def post_currency_to_currency(currency_name1, currency_name2):
 @app.get('/user/<user_id>')
 def user_info(user_id):
     info = Account.query.filter_by(UserId=user_id).all()
-    return f"User info {[itm.to_dict() for itm in info]}"
+    return [itm.to_dict() for itm in info]
 
 
 @app.get('/user/<user_id>/history')
 def user_history(user_id):
     history = Transactions.query.filter_by(UserId=user_id).order_by(Transactions.Date.desc()).all()
-    return f"History: {[itm.to_dict() for itm in history]}"
+    return [itm.to_dict() for itm in history]
 
 
 @app.get('/currency/<currency_name>/rating')
@@ -121,12 +123,7 @@ def get_currency_rating(currency_name):
     avr_rating = dict(db.session.query(db.func.avg(Rating.Rating).label('Rating')).filter(
         Rating.CurrencyName == currency_name).first())['Rating']
 
-    rating_comment_date = Rating.query.with_entities(Rating.Rating, Rating.Comment, Rating.Date).filter_by(
-        CurrencyName=currency_name).all()
-
-    return f"All rating:{[item.to_dict() for item in all_ratings]}, " \
-           f"Average rating for {currency_name} is: {avr_rating}, " \
-           f"Only rating, comment and day: {rating_comment_date}"
+    return {"currency name": currency_name, "average": avr_rating, "all_rating": [i.to_dict() for i in all_ratings]}
 
 
 @app.route('/currency/<currency_name>/rating', methods=['POST', 'PUT', 'DELETE'])
@@ -160,4 +157,4 @@ def currency_rating(currency_name):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', debug=True)
