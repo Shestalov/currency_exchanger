@@ -1,6 +1,8 @@
 version: "3.9"
 services:
   web:
+    environment:
+      DB_CONNECTION_STR: 'postgresql://postgres:example@pg:5432/postgres'
     build: .
     ports:
       - "5000:5000"

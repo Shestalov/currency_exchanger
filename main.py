@@ -1,17 +1,15 @@
 from datetime import datetime
-
-import psycopg2
 from flask import Flask, request
 from models import db
 from models import Currency, Account, Transactions, Rating
 from flask_migrate import Migrate
+import os
 
 app = Flask(__name__)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:example@127.0.0.1:5432/postgres'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DB_CONNECTION_STR')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
-migrate = Migrate(app, db)
+migrate = Migrate(app, db, render_as_batch=True)
 
 
 @app.route('/')
