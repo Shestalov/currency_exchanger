@@ -1,15 +1,12 @@
-from datetime import datetime
+import uuid
+import sqlalchemy
+import database
+import models
+import datetime
 from flask import Flask, request
-from models import db
-from models import Currency, Account, Transactions, Rating
-from flask_migrate import Migrate
-import os
+from celery_worker import task
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DB_CONNECTION_STR')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db.init_app(app)
-migrate = Migrate(app, db, render_as_batch=True)
 
 
 @app.route('/')
@@ -19,24 +16,27 @@ def index():
 
 @app.get('/currency')
 def all_currency():
-    date_now = datetime.now().strftime("%d-%m-%Y")
-    all_currency_info = Currency.query.filter_by(Date=date_now).all()
+    database.init_db()
+    date_now = datetime.datetime.now().strftime("%d-%m-%Y")
+    all_currency_info = models.Currency.query.filter_by(date=date_now).all()
     return [itm.to_dict() for itm in all_currency_info]
 
 
 @app.get('/currency/<currency_name>')
 def currency(currency_name):
-    date_now = datetime.now().strftime("%d-%m-%Y")
-    currency_info = Currency.query.filter_by(CurrencyName=currency_name, Date=date_now).all()
+    database.init_db()
+    date_now = datetime.datetime.now().strftime("%d-%m-%Y")
+    currency_info = models.Currency.query.filter_by(currency_name=currency_name, date=date_now).all()
     return [itm.to_dict() for itm in currency_info]
 
 
 @app.get('/currency/<currency_name1>/to/<currency_name2>')
 def currency_to_currency(currency_name1, currency_name2):
-    date_now = datetime.now().strftime("%d-%m-%Y")
+    database.init_db()
+    date_now = datetime.datetime.now().strftime("%d-%m-%Y")
 
-    currency_1 = Currency.query.filter_by(CurrencyName=currency_name1, Date=date_now).first().Buy
-    currency_2 = Currency.query.filter_by(CurrencyName=currency_name2, Date=date_now).first().Sale
+    currency_1 = models.Currency.query.filter_by(currency_name=currency_name1, date=date_now).first().buy
+    currency_2 = models.Currency.query.filter_by(currency_name=currency_name2, date=date_now).first().sale
 
     result_exchange = currency_1 / currency_2
 
@@ -44,114 +44,83 @@ def currency_to_currency(currency_name1, currency_name2):
 
 
 @app.post('/currency/<currency_name1>/to/<currency_name2>')
-def post_currency_to_currency(currency_name1, currency_name2):
-    user_id = request.get_json()["UserId"]
-    amount_to = request.get_json()["Amount"]
-    date_now = datetime.now().strftime("%d-%m-%Y")
+def post_currency_to_currency(currency_name1: str, currency_name2: str):
+    user_id = request.get_json()["user_id"]
+    amount_to = request.get_json()["amount"]
 
-    user_balance = Account.query.filter_by(CurrencyName=currency_name1, UserId=user_id).first()
-    currency_1_in = Currency.query.filter_by(CurrencyName=currency_name1, Date=date_now).first()
-    currency_2_in = Currency.query.filter_by(CurrencyName=currency_name2, Date=date_now).first()
-    res_exchanging = float("{:.2f}".format((currency_1_in.Buy * amount_to / currency_2_in.Sale)))
+    database.init_db()
+    transaction_id = str(uuid.uuid4())
+    date_now = datetime.datetime.now().strftime("%d-%m-%Y")
+    transaction = models.Transactions(user_id=user_id, currency_from=currency_name1, currency_to=currency_name2,
+                                      amount_spent=amount_to, received_amount=0, rate=0,
+                                      commission=0, date=date_now, status="in_processing",
+                                      transaction_id=transaction_id)
+    database.db_session.add(transaction)
+    database.db_session.commit()
 
-    """Is there enough currency2 in exchanger?"""
-    if currency_2_in.AvailableQuantity >= res_exchanging:
-        """Does the user have enough to exchange?"""
-        if user_balance.Balance >= amount_to:
-            """minus currency_name1 amount from user account"""
-            updated_user_balance_1 = user_balance.Balance - amount_to
-            Account.query.filter_by(UserId=user_id, CurrencyName=currency_name1).update(
-                dict(Balance=updated_user_balance_1))
-
-            """update or create currency_name2 for user account"""
-            user_balance_2 = Account.query.filter_by(CurrencyName=currency_name2, UserId=user_id).first()
-            if user_balance_2 is not None:
-                updated_user_balance_2 = user_balance_2.Balance + res_exchanging
-                Account.query.filter_by(UserId=user_id, CurrencyName=currency_name2).update(
-                    dict(Balance=updated_user_balance_2))
-
-            elif user_balance_2 is None:
-                created_currency_2 = Account(UserId=user_id, Balance=res_exchanging, CurrencyName=currency_name2)
-                db.session.add(created_currency_2)
-
-            """minus currency_name2 from exchanger"""
-            updated_currency_2_in = "{:.2f}".format(currency_2_in.AvailableQuantity - res_exchanging)
-            Currency.query.filter_by(CurrencyName=currency_name2, Date=date_now).update(
-                dict(AvailableQuantity=updated_currency_2_in))
-
-            """plus currency_name1 to exchanger"""
-            updated_currency_1_in = currency_1_in.AvailableQuantity + amount_to
-            Currency.query.filter_by(CurrencyName=currency_name1, Date=date_now).update(
-                dict(AvailableQuantity=updated_currency_1_in))
-
-            """save transaction"""
-            rate = float("{:.2f}".format((res_exchanging / amount_to)))
-            commission = 0
-
-            transaction = Transactions(UserId=user_id, CurrencyFrom=currency_name1, CurrencyTo=currency_name2,
-                                       AmountSpent=amount_to, ReceivedAmount=res_exchanging, Rate=rate,
-                                       Commission=commission, Date=date_now)
-            db.session.add(transaction)
-
-            """commit all"""
-            db.session.commit()
-            return "Transaction is successful"
-        else:
-            return "User doesn't have enough money or wrong username or wrong user_currency"
-    else:
-        return f"Exchanger doesn't have enough: {currency_name2}"
+    task_obj = task.apply_async(args=[user_id, amount_to, currency_name1, currency_name2, transaction_id])
+    return {'task_id': str(task_obj)}
 
 
 @app.get('/user/<user_id>')
 def user_info(user_id):
-    info = Account.query.filter_by(UserId=user_id).all()
+    database.init_db()
+    info = models.Account.query.filter_by(user_id=user_id).all()
     return [itm.to_dict() for itm in info]
 
 
 @app.get('/user/<user_id>/history')
 def user_history(user_id):
-    history = Transactions.query.filter_by(UserId=user_id).order_by(Transactions.Date.desc()).all()
+    database.init_db()
+    history = models.Transactions.query.filter_by(user_id=user_id).order_by(models.Transactions.date.desc()).all()
     return [itm.to_dict() for itm in history]
 
 
 @app.get('/currency/<currency_name>/rating')
 def get_currency_rating(currency_name):
-    all_ratings = Rating.query.filter_by(CurrencyName=currency_name).all()
+    database.init_db()
+    all_ratings = models.Rating.query.filter_by(currency_name=currency_name).all()
 
-    avr_rating = dict(db.session.query(db.func.avg(Rating.Rating).label('Rating')).filter(
-        Rating.CurrencyName == currency_name).first())['Rating']
+    avr_rating = dict(database.db_session.query(sqlalchemy.func.avg(models.Rating.rating).label('Rating')).filter(
+        models.Rating.currency_name == currency_name).first())['Rating']
 
     return {"currency name": currency_name, "average": avr_rating, "all_rating": [i.to_dict() for i in all_ratings]}
 
 
 @app.route('/currency/<currency_name>/rating', methods=['POST', 'PUT', 'DELETE'])
 def currency_rating(currency_name):
+    database.init_db()
     request_data = request.get_json()
     user_id = request_data['UserId']
     comment = request_data['Comment']
     rating = request_data['Rating']
-    date_now = datetime.now().strftime("%d-%m-%Y")
+    date_now = datetime.datetime.now().strftime("%d-%m-%Y")
 
     """users all comment/rating to the specified currency"""
-    user_rating = Rating.query.filter_by(UserId=user_id, CurrencyName=currency_name).first()
+    user_rating = models.Rating.query.filter_by(user_id=user_id, currency_name=currency_name).first()
 
     if request.method == "DELETE":
-        db.session.delete(user_rating)
-        db.session.commit()
+        database.db_session.delete(user_rating)
+        database.db_session.commit()
         return "The rating and comment are deleted."
 
     elif request.method == "POST":
-        new_rating = Rating(UserId=user_id, CurrencyName=currency_name, Rating=rating, Comment=comment,
-                            Date=date_now)
-        db.session.add(new_rating)
-        db.session.commit()
+        new_rating = models.Rating(user_id=user_id, currency_name=currency_name, rating=rating, comment=comment,
+                                   date=date_now)
+        database.db_session.add(new_rating)
+        database.db_session.commit()
         return "The rating and comment are added."
 
     elif request.method == "PUT":
-        Rating.query.filter_by(UserId=user_id, CurrencyName=currency_name).update(
-            dict(Rating=rating, Comment=comment, Date=date_now))
-        db.session.commit()
+        models.Rating.query.filter_by(user_id=user_id, currency_name=currency_name).update(
+            dict(rating=rating, comment=comment, date=date_now))
+        database.db_session.commit()
         return "The rating and comment are edited."
+
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    database.db_session.remove()
 
 
 if __name__ == '__main__':

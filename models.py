@@ -1,117 +1,123 @@
-from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import Column, Integer, REAL, String, Float
+from database import Base
 
-db = SQLAlchemy()
 
+class Currency(Base):
+    __tablename__ = 'currency'
 
-class Currency(db.Model):
-    __tablename__ = 'Currency'
-
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    CurrencyName = db.Column(db.String(15), nullable=False)
-    Buy = db.Column(db.REAL, nullable=False)
-    Sale = db.Column(db.REAL, nullable=False)
-    AvailableQuantity = db.Column(db.REAL, nullable=False)
-    Date = db.Column(db.String(10), nullable=False)
-    Test = db.Column(db.String(10))
+    id = Column(Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
+    currency_name = Column(String(15), nullable=False)
+    buy = Column(REAL, nullable=False)
+    sale = Column(REAL, nullable=False)
+    available_quantity = Column(REAL, nullable=False)
+    date = Column(String(10), nullable=False)
 
     def __repr__(self):
-        return '<Currency %r>' % self.CurrencyName
+        return '<Currency %r>' % self.currency_name
 
     def to_dict(self):
         return {
-            'Id': self.Id,
-            'CurrencyName': self.CurrencyName,
-            'Buy': self.Buy,
-            'Sale': self.Sale,
-            'AvailableQuantity': self.AvailableQuantity,
-            'Date': self.Date,
-            'Test': self.Test
+            'id': self.id,
+            'currency_name': self.currency_name,
+            'buy': self.buy,
+            'sale': self.sale,
+            'available_quantity': self.available_quantity,
+            'date': self.date
         }
 
 
-class User(db.Model):
-    __tablename__ = 'User'
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    Login = db.Column(db.String(20), nullable=False, unique=True)
-    Password = db.Column(db.String(30), nullable=False)
+class User(Base):
+    __tablename__ = 'user'
+
+    id = Column(Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
+    login = Column(String(20), nullable=False, unique=True)
+    password = Column(String(30), nullable=False)
 
     def __repr__(self):
         return '<User %r>' % self.Id
 
     def to_dict(self):
         return {
-            'Id': self.Id,
-            'Login': self.Login,
-            'Password': self.Password
+            'id': self.id,
+            'login': self.login,
+            'password': self.password
         }
 
 
-class Account(db.Model):
-    __tablename__ = 'Account'
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    UserId = db.Column(db.Integer, nullable=False)
-    Balance = db.Column(db.REAL, nullable=False)
-    CurrencyName = db.Column(db.String(10), nullable=False)
+class Account(Base):
+    __tablename__ = 'account'
+
+    id = Column(Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
+    user_id = Column(Integer, nullable=False)
+    balance = Column(REAL, nullable=False)
+    currency_name = Column(String(10), nullable=False)
 
     def __repr__(self):
-        return '<Account %r>' % self.UserId
+        return '<Account %r>' % self.user_id
 
     def to_dict(self):
         return {
-            'Id': self.Id,
-            'UserId': self.UserId,
-            'Balance': self.Balance,
-            'CurrencyName': self.CurrencyName
+            'id': self.id,
+            'user_id': self.user_id,
+            'balance': self.balance,
+            'currency_name': self.currency_name
         }
 
 
-class Transactions(db.Model):
-    __tablename__ = 'Transactions'
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    UserId = db.Column(db.Integer, nullable=False)
-    CurrencyFrom = db.Column(db.String(10), nullable=False)
-    CurrencyTo = db.Column(db.String(10), nullable=False)
-    AmountSpent = db.Column(db.REAL, nullable=False)
-    ReceivedAmount = db.Column(db.REAL, nullable=False)
-    Rate = db.Column(db.Integer, nullable=False)
-    Commission = db.Column(db.Integer, nullable=False)
-    Date = db.Column(db.String(10), nullable=False)
+class Transactions(Base):
+    __tablename__ = 'transactions'
+
+    id = Column(Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
+    user_id = Column(Integer, nullable=False)
+    currency_from = Column(String(10), nullable=False)
+    currency_to = Column(String(10), nullable=False)
+    amount_spent = Column(REAL, nullable=False)
+    received_amount = Column(REAL, nullable=False)
+    rate = Column(Float, nullable=False)
+    commission = Column(Integer, nullable=False)
+    date = Column(String(10), nullable=False)
+    status = Column(String(50), nullable=False)
+    transaction_id = Column(String(100), nullable=False)
 
     def __repr__(self):
-        return '<Currency %r>' % self.Id
+        return '<Transaction %r>' % self.id
 
     def to_dict(self):
         return {
-            'Id': self.Id,
-            'UserId': self.UserId,
-            'CurrencyFrom': self.CurrencyFrom,
-            'CurrencyTo': self.CurrencyTo,
-            'AmountSpent': self.AmountSpent,
-            'ReceivedAmount': self.ReceivedAmount,
-            'Rate': self.Rate,
-            'Commission': self.Commission,
-            'Date': self.Date
+            'id': self.id,
+            'user_id': self.user_id,
+            'currency_from': self.currency_from,
+            'currency_to': self.currency_to,
+            'amount_spent': self.amount_spent,
+            'received_amount': self.received_amount,
+            'rate': self.rate,
+            'commission': self.commission,
+            'date': self.date,
+            'status': self.status,
+            'transaction_id': self.transaction_id
         }
 
 
-class Rating(db.Model):
-    __tablename__ = 'Rating'
-    Id = db.Column(db.Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    UserId = db.Column(db.Integer, nullable=False)
-    CurrencyName = db.Column(db.String(10), nullable=False)
-    Rating = db.Column(db.Integer, nullable=False)
-    Comment = db.Column(db.String(50), nullable=False)
-    Date = db.Column(db.String(10), nullable=False)
+class Rating(Base):
+    __tablename__ = 'rating'
+
+    id = Column(Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
+    user_id = Column(Integer, nullable=False)
+    currency_name = Column(String(10), nullable=False)
+    rating = Column(Integer, nullable=False)
+    comment = Column(String(50), nullable=False)
+    date = Column(String(10), nullable=False)
 
     def __repr__(self):
-        return '<Currency %r>' % self.Id
+        return '<Currency name %r>' % self.currency_name
 
     def to_dict(self):
         return {
-            'Id': self.Id,
-            'UserId': self.UserId,
-            'CurrencyName': self.CurrencyName,
-            'Rating': self.Rating,
-            'Comment': self.Comment,
-            'Date': self.Date
+            'id': self.id,
+            'user_id': self.user_id,
+            'currency_name': self.currency_name,
+            'rating': self.rating,
+            'comment': self.comment,
+            'date': self.date
         }
+
