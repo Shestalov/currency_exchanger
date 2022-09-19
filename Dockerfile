@@ -6,5 +6,4 @@ RUN pip install -r requirements.txt
 
 COPY . /flask_exchanger
 EXPOSE 5000
-#CMD ["python", "./main.py"]
 
