@@ -48,17 +48,17 @@ class Account(Base):
     __tablename__ = 'account'
 
     id = Column(Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    user_id = Column(Integer, nullable=False)
+    user_login = Column(String(50), nullable=False)
     balance = Column(REAL, nullable=False)
     currency_name = Column(String(10), nullable=False)
 
     def __repr__(self):
-        return '<Account %r>' % self.user_id
+        return '<Account %r>' % self.user_login
 
     def to_dict(self):
         return {
             'id': self.id,
-            'user_id': self.user_id,
+            'user_login': self.user_login,
             'balance': self.balance,
             'currency_name': self.currency_name
         }
@@ -68,7 +68,7 @@ class Transactions(Base):
     __tablename__ = 'transactions'
 
     id = Column(Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    user_id = Column(Integer, nullable=False)
+    user_login = Column(String(50), nullable=False)
     currency_from = Column(String(10), nullable=False)
     currency_to = Column(String(10), nullable=False)
     amount_spent = Column(REAL, nullable=False)
@@ -85,7 +85,7 @@ class Transactions(Base):
     def to_dict(self):
         return {
             'id': self.id,
-            'user_id': self.user_id,
+            'user_login': self.user_login,
             'currency_from': self.currency_from,
             'currency_to': self.currency_to,
             'amount_spent': self.amount_spent,
@@ -102,7 +102,7 @@ class Rating(Base):
     __tablename__ = 'rating'
 
     id = Column(Integer, autoincrement=True, primary_key=True, nullable=False, unique=True)
-    user_id = Column(Integer, nullable=False)
+    user_login = Column(String(50), nullable=False)
     currency_name = Column(String(10), nullable=False)
     rating = Column(Integer, nullable=False)
     comment = Column(String(50), nullable=False)
@@ -114,7 +114,7 @@ class Rating(Base):
     def to_dict(self):
         return {
             'id': self.id,
-            'user_id': self.user_id,
+            'user_login': self.user_login,
             'currency_name': self.currency_name,
             'rating': self.rating,
             'comment': self.comment,

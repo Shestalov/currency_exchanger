@@ -1,8 +1,8 @@
-DELETE http://127.0.0.1:5000/currency/usd/rating
+POST http://127.0.0.1:5000/currency/usd/rating
 Content-Type: application/json
 
 {
-  "UserId": 101,
-  "Rating": 10,
-  "Comment": "Good"
+  "user_login": "oleksa",
+  "rating": 10,
+  "comment": "Good"
 }

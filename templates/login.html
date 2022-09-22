@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Log in
+{% endblock %}
+
+{% block body %}
+<form method="post" style="max-width:480px; margin: auto;">
+
+    <img class="mb-4" src="https://getbootstrap.com/docs/5.0/assets/brand/bootstrap-logo.svg" alt="Bootstrap Logo"
+         width="72" height="57">
+
+    <h1 class="h3 mb-3 fw-normal">Please sign in</h1>
+
+    <div class="form-floating">
+        <input type="text" class="form-control" id="uname" placeholder="Enter User name" name="uname" required>
+        <label for="uname">User name</label>
+    </div>
+
+    <div class="form-floating">
+        <input type="password" class="form-control" id="psw" placeholder="Enter password" name="psw" required>
+        <label for="psw">Password</label>
+    </div>
+    <br>
+
+    <button class="w-100 btn btn-lg btn-primary" type="submit">Sign in</button>
+</form>
+{% endblock %}
+
+{% block more_css %}
+<link rel="stylesheet" href="/css/login.css">
+{% endblock %}

@@ -2,6 +2,6 @@ POST http://127.0.0.1:5000/currency/usd/to/eur
 Content-Type: application/json
 
 {
-  "UserId": 101,
-  "Amount": 100
+  "user_login": "oleksa",
+  "amount": 100
 }

@@ -4,7 +4,7 @@ import datetime
 import database
 from celery import Celery
 
-app = Celery('celery_worker', broker=os.environ.get("RABBIT_CONNECTION_STR"))
+app = Celery("celery_worker", broker=os.environ.get("RABBIT_CONNECTION_STR"))
 
 
 def change_status_transaction(transaction_id: str, res_exchanging: float, rate: float, commission: int, date_now: str,
@@ -14,12 +14,12 @@ def change_status_transaction(transaction_id: str, res_exchanging: float, rate: 
 
 
 @app.task()
-def task(user_id: int, amount_to: float, currency_name1: str, currency_name2: str, transaction_id: str) -> str:
+def task(user_login: str, amount_to: float, currency_name1: str, currency_name2: str, transaction_id: str):
     database.init_db()
 
     date_now = datetime.datetime.now().strftime("%d-%m-%Y")
 
-    user_balance = models.Account.query.filter_by(currency_name=currency_name1, user_id=user_id).first()
+    user_balance = models.Account.query.filter_by(currency_name=currency_name1, user_login=user_login).first()
     currency_1_in = models.Currency.query.filter_by(currency_name=currency_name1, date=date_now).first()
     currency_2_in = models.Currency.query.filter_by(currency_name=currency_name2, date=date_now).first()
     res_exchanging = float("{:.2f}".format((currency_1_in.buy * amount_to / currency_2_in.sale)))
@@ -34,18 +34,18 @@ def task(user_id: int, amount_to: float, currency_name1: str, currency_name2: st
 
             """minus currency_name1 amount from user account"""
             updated_user_balance_1 = user_balance.balance - amount_to
-            models.Account.query.filter_by(user_id=user_id, currency_name=currency_name1).update(
+            models.Account.query.filter_by(user_login=user_login, currency_name=currency_name1).update(
                 dict(balance=updated_user_balance_1))
 
             """update or create currency_name2 for user account"""
-            user_balance_2 = models.Account.query.filter_by(currency_name=currency_name2, user_id=user_id).first()
+            user_balance_2 = models.Account.query.filter_by(currency_name=currency_name2, user_login=user_login).first()
             if user_balance_2 is not None:
                 updated_user_balance_2 = user_balance_2.balance + res_exchanging
-                models.Account.query.filter_by(user_id=user_id, currency_name=currency_name2).update(
+                models.Account.query.filter_by(user_login=user_login, currency_name=currency_name2).update(
                     dict(balance=updated_user_balance_2))
 
             elif user_balance_2 is None:
-                created_currency_2 = models.Account(user_id=user_id,
+                created_currency_2 = models.Account(user_login=user_login,
                                                     balance=res_exchanging,
                                                     currency_name=currency_name2)
                 database.db_session.add(created_currency_2)
@@ -67,16 +67,16 @@ def task(user_id: int, amount_to: float, currency_name1: str, currency_name2: st
             """commit all"""
             database.db_session.commit()
 
-            return "Transaction is successful"
+            return {"status": "Transaction is successful"}
 
         else:
             status = "user error"
             change_status_transaction(transaction_id, res_exchanging, rate, commission, date_now, status)
             database.db_session.commit()
-            return "User doesn't have enough money or wrong username or wrong user_currency"
+            return {"status": "User doesn't have enough money or wrong username or wrong user_currency"}
 
     else:
         status = "exchanger error"
         change_status_transaction(transaction_id, res_exchanging, rate, commission, date_now, status)
         database.db_session.commit()
-        return f"Exchanger doesn't have enough: {currency_name2}"
+        return {"status": f"Exchanger doesn't have enough: {currency_name2}"}
